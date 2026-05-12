@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZK Graph View</title>
+  <link rel="stylesheet" href="zk-graph-viewer.css">
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">zk<span>·</span>graph</div>
+
+  <div id="search-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input id="search" type="text" placeholder="Search by title or filename…">
+  </div>
+
+  <button id="reload-btn" title="Re-fetch graph.json and notes.json">↺ Reload</button>
+  <div id="status-pill">loading…</div>
+
+  <div class="topbar-stats">
+    <span>Nodes <b id="stat-nodes">0</b></span>
+    <span>Links <b id="stat-links">0</b></span>
+  </div>
+</div>
+
+<div id="main">
+  <div id="graph-container">
+    <svg id="svg"></svg>
+
+    <div id="empty-hint">
+      <div class="hint-icon">🕸️</div>
+      <h2>Loading…</h2>
+      <p>Fetching <code>graph.json</code> and <code>notes.json</code><br>from the same directory as this file.</p>
+    </div>
+
+    <div id="controls">
+      <button class="ctrl-btn" id="zoom-in"  title="Zoom in">+</button>
+      <button class="ctrl-btn" id="zoom-out" title="Zoom out">−</button>
+      <button class="ctrl-btn" id="zoom-fit" title="Fit all">⊡</button>
+    </div>
+
+    <div id="legend">
+      <div class="legend-title">Legend</div>
+      <div class="legend-item"><div class="dot" style="background:var(--node-hub)"></div><span>Hub node</span></div>
+      <div class="legend-item"><div class="dot" style="background:var(--node-default)"></div><span>Regular note</span></div>
+      <div class="legend-item"><div class="dot" style="background:var(--node-selected)"></div><span>Selected</span></div>
+      <div class="legend-item"><div class="dot" style="background:var(--node-connected)"></div><span>Connected</span></div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="panel-header">
+      <div>
+        <div id="panel-title">—</div>
+        <div id="panel-stem"></div>
+      </div>
+      <button id="panel-close">✕</button>
+    </div>
+    <div id="panel-tabs">
+      <button class="tab-btn active" data-tab="content">Content</button>
+      <button class="tab-btn" data-tab="links">Links</button>
+      <button class="tab-btn" data-tab="meta">Meta</button>
+    </div>
+    <div id="panel-body">
+      <div class="tab-pane active" id="tab-content"></div>
+      <div class="tab-pane"        id="tab-links"></div>
+      <div class="tab-pane"        id="tab-meta"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="zk-graph-viewer.js"></script>
+</body>
+</html>
