@@ -20,8 +20,8 @@ async function loadAll() {
 
   try {
     const [graphRes, notesRes] = await Promise.all([
-      fetch('graph.json'),
-      fetch('notes.json')
+      fetch('data/graph.json'),
+      fetch('data/notes.json')
     ]);
 
     if (!graphRes.ok) throw new Error(`graph.json: ${graphRes.status} ${graphRes.statusText}`);
