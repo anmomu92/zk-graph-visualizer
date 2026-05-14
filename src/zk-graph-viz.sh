@@ -4,6 +4,9 @@
 WWW_DIR="$( dirname "$( dirname -- "$( readlink -f -- "${BASH_SOURCE[0]}" )" )" )/www"
 DATA_DIR="${WWW_DIR}/data"
 
+# create data directory
+mkdir -p ${DATA_DIR}
+
 BROWSER="brave-browser"
 
 # Generate JSON files
