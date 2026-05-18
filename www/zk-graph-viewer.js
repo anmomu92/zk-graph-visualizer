@@ -237,6 +237,7 @@ function showPanel(d) {
   const cpane = document.getElementById('tab-content');
   if (d.rawContent) {
     cpane.innerHTML = `<div class="md-content">${renderMd(d.rawContent)}</div>`;
+    foldHeadings(cpane.querySelector('.md-content'));
     cpane.querySelectorAll('.wikilink[data-stem]').forEach(el => {
       el.addEventListener('click', () => {
         const n = allNodes.find(x => x.stem === el.dataset.stem);
@@ -245,6 +246,10 @@ function showPanel(d) {
         panToNode(n);
       });
     });
+    // Ask MathJax to typeset the new content (no-op if MathJax not loaded)
+    if (window.MathJax && MathJax.typesetPromise) {
+      MathJax.typesetPromise([cpane]).catch(err => console.warn('MathJax:', err));
+    }
   } else {
     cpane.innerHTML = `<div class="no-content">
       <div class="nc-icon">📄</div>
@@ -319,8 +324,173 @@ document.getElementById('panel-close').addEventListener('click', () => {
   selectedNode = null;
 });
 
+// ── PANEL RESIZE ──────────────────────────────────────────────────────────────
+(function () {
+  const handle = document.getElementById('panel-resize-handle');
+  let dragging = false;
+  let startX, startWidth;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging   = true;
+    startX     = e.clientX;
+    startWidth = panel.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cursor    = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    // Handle is on the LEFT edge of the panel; dragging left = wider
+    const delta    = startX - e.clientX;
+    const newWidth = Math.min(780, Math.max(260, startWidth + delta));
+    panel.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor     = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+// ── FOLDABLE HEADINGS ─────────────────────────────────────────────────────────
+// Wraps every H2/H3 and its following sibling content in a <details> element.
+// H1 is left as-is (it's the note title). Starts collapsed.
+function foldHeadings(container) {
+  if (!container) return;
+
+  // Heading tags we want to make foldable (not H1)
+  const FOLD_TAGS = new Set(['H2', 'H3']);
+
+  const children = Array.from(container.childNodes);
+  let i = 0;
+
+  while (i < children.length) {
+    const node = children[i];
+
+    if (node.nodeType === Node.ELEMENT_NODE && FOLD_TAGS.has(node.tagName)) {
+      const level   = parseInt(node.tagName[1]);
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+
+      // Move heading content into <summary>
+      summary.innerHTML = node.innerHTML;
+      summary.dataset.level = level;
+      details.appendChild(summary);
+
+      // Collect all following siblings that belong under this heading:
+      // stop when we hit another heading of equal or lesser depth
+      let j = i + 1;
+      while (j < children.length) {
+        const sib = children[j];
+        if (
+          sib.nodeType === Node.ELEMENT_NODE &&
+          FOLD_TAGS.has(sib.tagName) &&
+          parseInt(sib.tagName[1]) <= level
+        ) break;
+        details.appendChild(sib.cloneNode(true));
+        j++;
+      }
+
+      // Replace original nodes with the <details> block
+      const toRemove = children.slice(i, j);
+      toRemove.forEach(n => n.parentNode && n.parentNode.removeChild(n));
+      container.insertBefore(details, children[j] || null);
+
+      // Refresh children array after DOM mutation
+      children.splice(i, j - i, details);
+    }
+
+    i++;
+  }
+}
+
+// ── INLINE FORMATTER ─────────────────────────────────────────────────────────
+// Apply bold, italic, inline-code and wiki-links to an already-escaped string.
+// Used for table cells and list items that need inline formatting.
+function inlineFmt(s) {
+  s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+  return s;
+}
+
+// ── TABLE RENDERER ────────────────────────────────────────────────────────────
+// Receives the raw lines array (before esc()), the latex stash function, and
+// the latex array. Produces table HTML with cells already escaped+formatted,
+// including LaTeX stashing inside cells.
+function renderTables(lines, stashLatex) {
+  const out = [];
+  let i = 0;
+
+  function parseCells(line) {
+    // strip leading/trailing pipe then split — handles lines with or without outer pipes
+    return line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  }
+
+  function isSeparator(line) {
+    // each cell must be only dashes, optional colons, optional spaces
+    const cells = parseCells(line.trim());
+    return cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c.trim()));
+  }
+
+  function alignment(cell) {
+    const t = cell.trim();
+    if (/^:-+:$/.test(t)) return 'center';
+    if (/^-+:$/.test(t))  return 'right';
+    return 'left';
+  }
+
+  // Render a single cell: stash latex, then escape, then inline-format
+  function renderCell(raw) {
+    const latexed = stashLatex(raw);
+    return inlineFmt(esc(latexed));
+  }
+
+  while (i < lines.length) {
+    const line = typeof lines[i] === 'string' ? lines[i] : '';
+    if (
+      line.trim().startsWith('|') &&
+      i + 1 < lines.length &&
+      isSeparator(lines[i + 1])
+    ) {
+      const headers = parseCells(line);
+      const aligns  = parseCells(lines[i + 1]).map(alignment);
+      i += 2;
+
+      let html = '<div class="md-table-wrap"><table class="md-table"><thead><tr>';
+      headers.forEach((h, ci) => {
+        html += `<th style="text-align:${aligns[ci]||'left'}">${renderCell(h)}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      while (i < lines.length && typeof lines[i] === 'string' && lines[i].trim().startsWith('|')) {
+        const cells = parseCells(lines[i]);
+        html += '<tr>';
+        cells.forEach((c, ci) => {
+          html += `<td style="text-align:${aligns[ci]||'left'}">${renderCell(c)}</td>`;
+        });
+        html += '</tr>';
+        i++;
+      }
+
+      html += '</tbody></table></div>';
+      out.push(html);
+    } else {
+      out.push(lines[i]);
+      i++;
+    }
+  }
+  return out;
+}
+
 // ── NESTED LIST RENDERER ──────────────────────────────────────────────────────
-// Converts a block of indented list lines into nested <ul>/<ol> HTML.
 function renderLists(s) {
   const lines = s.split('\n');
   const out   = [];
@@ -335,16 +505,13 @@ function renderLists(s) {
   function isList(line) { return isUL(line) || isOL(line); }
 
   function parseList(minIndent) {
-    // Determine list type from first item
     const tag = isOL(lines[i]) ? 'ol' : 'ul';
     let html = `<${tag}>`;
 
     while (i < lines.length && isList(lines[i]) && indentOf(lines[i]) >= minIndent) {
       const indent = indentOf(lines[i]);
-      // Strip the bullet/number prefix to get item text
       const text = lines[i].replace(/^[ \t]*(?:[-*+]|\d+\.) /, '');
       i++;
-      // Check if next line(s) are a deeper nested list
       let children = '';
       while (i < lines.length && isList(lines[i]) && indentOf(lines[i]) > indent) {
         children += parseList(indentOf(lines[i]));
@@ -369,17 +536,48 @@ function renderLists(s) {
 
 // ── MARKDOWN RENDERER ─────────────────────────────────────────────────────────
 function renderMd(raw) {
-  // 1. escape HTML first
-  let s = esc(raw);
+  // Shared latex stash — populated by stashLatex(), restored at the very end.
+  const latex = [];
 
-  // 2. protect fenced code blocks
+  function stashLatex(src) {
+    return src
+      .replace(/\$\$([\s\S]+?)\$\$/g,              (_, m) => { latex.push(`$$${m}$$`);   return `\x00L${latex.length-1}\x00`; })
+      .replace(/\\\[([\s\S]+?)\\\]/g,              (_, m) => { latex.push(`\\[${m}\\]`); return `\x00L${latex.length-1}\x00`; })
+      .replace(/(?<!\$)\$([^\$\n]+?)\$(?!\$)/g,    (_, m) => { latex.push(`$${m}$`);     return `\x00L${latex.length-1}\x00`; })
+      .replace(/\\\((.+?)\\\)/g,                   (_, m) => { latex.push(`\\(${m}\\)`); return `\x00L${latex.length-1}\x00`; });
+  }
+
+  // ── STEP 1: split into lines; run table renderer on raw lines
+  // (renderTables handles its own LaTeX stashing + escaping per cell)
+  let lines = raw.split('\n');
+  lines = renderTables(lines, stashLatex);
+
+  // ── STEP 2: stash table HTML behind placeholders
+  const tableBlocks = [];
+  lines = lines.map(l => {
+    if (typeof l === 'string' && l.startsWith('<div class="md-table-wrap">')) {
+      tableBlocks.push(l);
+      return `\x00T${tableBlocks.length-1}\x00`;
+    }
+    return l;
+  });
+
+  let s = lines.join('\n');
+
+  // ── STEP 3: stash LaTeX in remaining (non-table) raw text
+  s = stashLatex(s);
+
+  // ── STEP 4: HTML-escape plain text
+  s = esc(s);
+
+  // ── STEP 5: protect fenced code blocks
   const blocks = [];
   s = s.replace(/```[\s\S]*?```/g, m => { blocks.push(m); return `\x00B${blocks.length-1}\x00`; });
 
-  // 3. inline code
+  // ── STEP 6: inline code
   s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`);
 
-  // 4. wiki-links [[stem]] — show title if known, fall back to stem
+  // ── STEP 7: wiki-links [[stem]]
   s = s.replace(/\[\[([^\]]+)\]\]/g, (_, stem) => {
     const node  = allNodes.find(n => n.stem===stem);
     const res   = node ? ' resolved' : '';
@@ -387,33 +585,54 @@ function renderMd(raw) {
     return `<span class="wikilink${res}" data-stem="${escAttr(stem)}" title="${escAttr(stem)}">${esc(label)}</span>`;
   });
 
-  // 5. headings
+  // ── STEP 8: headings
   s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   s = s.replace(/^## (.+)$/gm,  '<h2>$1</h2>');
   s = s.replace(/^# (.+)$/gm,   '<h1>$1</h1>');
 
-  // 6. HR
+  // ── STEP 9: HR (--- that isn't a table separator — those are already consumed)
   s = s.replace(/^---+$/gm, '<hr>');
 
-  // 7. bold / italic
+  // ── STEP 10: bold / italic
   s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  s = s.replace(/_([^_\n]+)_/g, '<em>$1</em>');
 
-  // 8. blockquotes
-  s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // ── STEP 11: callouts and blockquotes (run on raw-escaped text)
+  // Obsidian/GitHub callout: > [!TYPE] on first line, then > continuation lines
+  s = s.replace(
+    /(?:^|\n)(&gt; \[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT|INFO)\][ \t]*\n?)((?:&gt;[^\n]*\n?)*)/gi,
+    (_, first, type, rest) => {
+      const label = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+      const icon  = { note:'ℹ️', tip:'💡', warning:'⚠️', caution:'🔥', important:'📌', info:'ℹ️' }[type.toLowerCase()] || 'ℹ️';
+      const body  = rest.replace(/^&gt; ?/gm, '').trim();
+      return `<div class="callout callout-${type.toLowerCase()}"><div class="callout-title">${icon} ${label}</div><div class="callout-body">${body}</div></div>`;
+    }
+  );
+  // Plain blockquotes
+  s = s.replace(/^(&gt; .+\n?)+/gm, block => {
+    const inner = block.replace(/^&gt; ?/gm, '').trimEnd();
+    return `<blockquote>${inner}</blockquote>\n`;
+  });
 
-  // 9 & 10. lists (unordered and ordered) — recursive, preserves nesting
+  // ── STEP 12: nested lists
   s = renderLists(s);
 
-  // 11. restore code blocks
+  // ── STEP 13: restore code blocks
   s = s.replace(/\x00B(\d+)\x00/g, (_, i) => {
     const inner = blocks[+i].replace(/^```[^\n]*\n?/, '').replace(/```$/, '');
     return `<pre><code>${inner}</code></pre>`;
   });
 
-  // 12. paragraphs — lines not already inside block tags
-  s = s.replace(/^(?!<[houpbr]|<pre|<hr|<blockquote)(.+)$/gm, '<p>$1</p>');
+  // ── STEP 14: restore table blocks
+  s = s.replace(/\x00T(\d+)\x00/g, (_, i) => tableBlocks[+i]);
+
+  // ── STEP 15: restore LaTeX verbatim (MathJax processes after DOM insertion)
+  s = s.replace(/\x00L(\d+)\x00/g, (_, i) => latex[+i]);
+
+  // ── STEP 16: paragraphs (skip lines already starting with a block tag)
+  s = s.replace(/^(?!<[houtbpdr]|<pre|<hr|<blockquote|<div)(.+)$/gm, '<p>$1</p>');
   s = s.replace(/<p>\s*<\/p>/g, '');
 
   return s;

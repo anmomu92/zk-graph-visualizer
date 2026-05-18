@@ -193,14 +193,32 @@ body {
 /* ── PANEL ── */
 #panel {
   width: 400px;
+  min-width: 260px;
+  max-width: 780px;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex; flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
   flex-shrink: 0;
+  position: relative;
 }
 #panel.open { transform: translateX(0); }
+
+#panel-resize-handle {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+#panel-resize-handle:hover,
+#panel-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
+}
 
 #panel-header {
   padding: 16px 20px;
@@ -256,6 +274,48 @@ body {
   font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
   color: var(--text-secondary); margin: 14px 0 6px;
 }
+
+/* foldable sections */
+.md-content details { margin: 4px 0; }
+.md-content details + details { margin-top: 2px; }
+
+.md-content summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  padding: 3px 4px;
+  margin: 0 -4px;
+  transition: background 0.15s;
+  user-select: none;
+}
+.md-content summary::-webkit-details-marker { display: none; }
+.md-content summary::before {
+  content: '▶';
+  font-size: 8px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+.md-content details[open] > summary::before { transform: rotate(90deg); }
+.md-content summary:hover { background: var(--surface2); }
+
+/* preserve heading styles inside summary */
+.md-content summary[data-level="2"] {
+  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600;
+  color: var(--text-primary); margin-top: 14px;
+}
+.md-content summary[data-level="3"] {
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* indent the body of each fold */
+.md-content details > :not(summary) { margin-left: 16px; }
 .md-content p { margin: 0 0 10px; }
 .md-content ul,
 .md-content ol { margin: 0 0 10px 20px; padding-left: 0; }
@@ -277,6 +337,50 @@ body {
   padding: 4px 12px; color: var(--text-secondary); font-style: italic;
 }
 .md-content hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* callouts (Obsidian > [!NOTE] style) */
+.callout {
+  border-radius: 6px; margin: 0 0 14px;
+  padding: 10px 14px; border-left: 3px solid;
+}
+.callout-title {
+  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+  margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.callout-body { font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+.callout-note, .callout-info {
+  background: rgba(61,127,255,0.07); border-color: rgba(61,127,255,0.5);
+}
+.callout-note .callout-title, .callout-info .callout-title { color: #7ba8ff; }
+.callout-tip {
+  background: rgba(123,255,176,0.07); border-color: rgba(123,255,176,0.5);
+}
+.callout-tip .callout-title { color: #7bffb0; }
+.callout-warning, .callout-caution {
+  background: rgba(255,193,7,0.07); border-color: rgba(255,193,7,0.5);
+}
+.callout-warning .callout-title, .callout-caution .callout-title { color: #ffc107; }
+.callout-important {
+  background: rgba(255,107,53,0.07); border-color: rgba(255,107,53,0.5);
+}
+.callout-important .callout-title { color: #ff6b35; }
+
+/* tables */
+.md-table-wrap { overflow-x: auto; margin: 0 0 14px; border-radius: 6px; border: 1px solid var(--border); }
+.md-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+.md-table thead { background: var(--surface2); }
+.md-table th {
+  padding: 7px 12px; text-align: left; font-weight: 600;
+  color: var(--text-primary); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.md-table td {
+  padding: 6px 12px; color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.md-table tr:last-child td { border-bottom: none; }
+.md-table tbody tr:hover { background: var(--surface2); }
 
 .md-content .wikilink {
   display: inline-block; background: rgba(61,127,255,0.12); color: var(--accent);
