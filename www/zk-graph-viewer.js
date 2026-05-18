@@ -319,6 +319,54 @@ document.getElementById('panel-close').addEventListener('click', () => {
   selectedNode = null;
 });
 
+// ── NESTED LIST RENDERER ──────────────────────────────────────────────────────
+// Converts a block of indented list lines into nested <ul>/<ol> HTML.
+function renderLists(s) {
+  const lines = s.split('\n');
+  const out   = [];
+  let i = 0;
+
+  function indentOf(line) {
+    const m = line.match(/^([ \t]*)/);
+    return m ? m[1].replace(/\t/g, '    ').length : 0;
+  }
+  function isUL(line) { return /^[ \t]*[-*+] /.test(line); }
+  function isOL(line) { return /^[ \t]*\d+\. /.test(line); }
+  function isList(line) { return isUL(line) || isOL(line); }
+
+  function parseList(minIndent) {
+    // Determine list type from first item
+    const tag = isOL(lines[i]) ? 'ol' : 'ul';
+    let html = `<${tag}>`;
+
+    while (i < lines.length && isList(lines[i]) && indentOf(lines[i]) >= minIndent) {
+      const indent = indentOf(lines[i]);
+      // Strip the bullet/number prefix to get item text
+      const text = lines[i].replace(/^[ \t]*(?:[-*+]|\d+\.) /, '');
+      i++;
+      // Check if next line(s) are a deeper nested list
+      let children = '';
+      while (i < lines.length && isList(lines[i]) && indentOf(lines[i]) > indent) {
+        children += parseList(indentOf(lines[i]));
+      }
+      html += `<li>${text}${children}</li>`;
+    }
+
+    html += `</${tag}>`;
+    return html;
+  }
+
+  while (i < lines.length) {
+    if (isList(lines[i])) {
+      out.push(parseList(indentOf(lines[i])));
+    } else {
+      out.push(lines[i]);
+      i++;
+    }
+  }
+  return out.join('\n');
+}
+
 // ── MARKDOWN RENDERER ─────────────────────────────────────────────────────────
 function renderMd(raw) {
   // 1. escape HTML first
@@ -355,17 +403,8 @@ function renderMd(raw) {
   // 8. blockquotes
   s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // 9. unordered lists
-  s = s.replace(/((?:^[ \t]*[-*+] .+\n?)+)/gm, block => {
-    const items = block.trim().split('\n').map(l => `<li>${l.replace(/^[ \t]*[-*+] /, '')}</li>`).join('');
-    return `<ul>${items}</ul>`;
-  });
-
-  // 10. ordered lists
-  s = s.replace(/((?:^\d+\. .+\n?)+)/gm, block => {
-    const items = block.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
-    return `<ol>${items}</ol>`;
-  });
+  // 9 & 10. lists (unordered and ordered) — recursive, preserves nesting
+  s = renderLists(s);
 
   // 11. restore code blocks
   s = s.replace(/\x00B(\d+)\x00/g, (_, i) => {
