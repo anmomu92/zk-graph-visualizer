@@ -11,11 +11,16 @@ printf "\nBEGINNING INSTALLATION\n"
 
 # Check that scripts direrctory exists
 #	If not, create it
-#	otherwise, link script in such dir
+#	otherwise, link scripts in such dir
 if [ ! -d "${SCRIPTS_DIR}" ]; then
 	mkdir -p "${SCRIPTS_DIR}"
 else
-	ln -s "${SRCS_DIR}/zk-graph-viz.sh" "${SCRIPTS_DIR}/zk-graph-viz" && printf "zk-graph-viz.sh linked in ${SCRIPTS_DIR}\n"
+	for script in "${SRCS_DIR}"/*; do
+		filename=$(basename "$script")
+		name="${filename%.sh}"
+		ln -s "${SRCS_DIR}/${filename}" "${SCRIPTS_DIR}/${name}" && \
+			printf "zk-graph-viz.sh linked in ${SCRIPTS_DIR}\n"
+	done
 fi
 
 # If scripts directory is not in path, include it
