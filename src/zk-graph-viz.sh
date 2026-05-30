@@ -7,7 +7,7 @@ DATA_DIR="${WWW_DIR}/data"
 # create data directory
 mkdir -p ${DATA_DIR}
 
-BROWSER="brave-browser"
+BROWSER="firefox --private-window"
 
 # Generate JSON files
 zk graph -f json > "${DATA_DIR}/graph.json"
@@ -21,4 +21,4 @@ else
 fi
 
 # Open the browser
-brave-browser 0.0.0.0:8000
+${BROWSER} "http://127.0.0.1:8000/"
