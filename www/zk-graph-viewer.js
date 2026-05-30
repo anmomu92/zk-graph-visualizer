@@ -170,7 +170,13 @@ function renderGraph() {
       linkSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
              .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
       nodeSel.attr('transform', d=>`translate(${d.x},${d.y})`);
+      updateHintOverlay();
     });
+
+  // Re-sync hint positions whenever the user pans or zooms
+  zoomBehavior.on('zoom.hints', updateHintOverlay);
+
+  buildHintOverlay(nodeSel);
 
   document.getElementById('zoom-in').onclick  = () => svg.transition().call(zoomBehavior.scaleBy, 1.4);
   document.getElementById('zoom-out').onclick = () => svg.transition().call(zoomBehavior.scaleBy, 0.7);
@@ -180,6 +186,48 @@ function renderGraph() {
 function truncLabel(s) {
   if (!s) return '';
   return s.length > 24 ? s.slice(0,22)+'…' : s;
+}
+
+// ── HINT OVERLAY ──────────────────────────────────────────────────────────────
+// Invisible <a> elements that sit on top of each node so qutebrowser's
+// f-hint mode can target them. Positions are kept in sync with the simulation
+// and the current zoom/pan transform.
+
+const hintOverlay = document.getElementById('hint-overlay');
+
+function buildHintOverlay(nodeSel) {
+  hintOverlay.innerHTML = '';
+  allNodes.forEach(d => {
+    const a = document.createElement('a');
+    a.className  = 'node-hint';
+    a.href       = '#';
+    a.dataset.id = d.id;
+    a.setAttribute('aria-label', d.label);   // qutebrowser shows this as hint text
+    a.setAttribute('title', d.label);
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      selectNode(d, d3.selectAll('.node'), d3.selectAll('.link'));
+      // Don't pan — the user can see the node, they just hinted it
+    });
+    hintOverlay.appendChild(a);
+  });
+}
+
+function updateHintOverlay() {
+  if (!zoomBehavior) return;
+  const svgEl    = document.getElementById('svg');
+  const t        = d3.zoomTransform(svgEl);    // current pan/zoom transform
+  const anchors  = hintOverlay.querySelectorAll('a.node-hint');
+
+  allNodes.forEach((d, i) => {
+    const a = anchors[i];
+    if (!a) return;
+    // Convert simulation coords → screen coords using the D3 transform
+    const sx = t.applyX(d.x);
+    const sy = t.applyY(d.y);
+    a.style.left = sx + 'px';
+    a.style.top  = sy + 'px';
+  });
 }
 
 // ── SELECTION ─────────────────────────────────────────────────────────────────
