@@ -639,11 +639,80 @@ function renderMd(raw) {
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────────────
-document.getElementById('search').addEventListener('input', function() {
-  const q = this.value.toLowerCase().trim();
-  d3.selectAll('.node').classed('dimmed', d =>
-    q ? !d.label.toLowerCase().includes(q) && !d.stem.toLowerCase().includes(q) : false
+let searchMatches = [];   // ordered list of matching nodes
+let searchIndex   = -1;   // which match is currently focused
+
+function runSearch(q) {
+  if (!q) {
+    searchMatches = [];
+    searchIndex   = -1;
+    d3.selectAll('.node').classed('dimmed', false);
+    clearSearchCount();
+    // close panel only if it was opened by a search selection
+    if (panel.dataset.openedBySearch) {
+      panel.classList.remove('open');
+      deselectAll(d3.selectAll('.node'), d3.selectAll('.link'));
+      selectedNode = null;
+      delete panel.dataset.openedBySearch;
+    }
+    return;
+  }
+
+  // Collect matches in a stable order (by node id)
+  searchMatches = allNodes.filter(n =>
+    n.label.toLowerCase().includes(q) || n.stem.toLowerCase().includes(q)
   );
+  searchIndex = searchMatches.length ? 0 : -1;
+
+  // Dim non-matches
+  d3.selectAll('.node').classed('dimmed', d =>
+    !d.label.toLowerCase().includes(q) && !d.stem.toLowerCase().includes(q)
+  );
+
+  focusSearchMatch();
+}
+
+function focusSearchMatch() {
+  if (searchIndex < 0 || !searchMatches.length) return;
+  const n = searchMatches[searchIndex];
+  selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
+  panToNode(n);
+  panel.dataset.openedBySearch = '1';
+  // Update counter badge
+  const counter = document.getElementById('search-count');
+  if (counter) counter.textContent = `${searchIndex + 1} / ${searchMatches.length}`;
+}
+
+function clearSearchCount() {
+  const counter = document.getElementById('search-count');
+  if (counter) counter.textContent = '';
+}
+
+const searchEl = document.getElementById('search');
+
+searchEl.addEventListener('input', function () {
+  runSearch(this.value.toLowerCase().trim());
+});
+
+searchEl.addEventListener('keydown', function (e) {
+  if (!searchMatches.length) return;
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    // Shift+Enter goes backwards, Enter goes forwards
+    if (e.shiftKey) {
+      searchIndex = (searchIndex - 1 + searchMatches.length) % searchMatches.length;
+    } else {
+      searchIndex = (searchIndex + 1) % searchMatches.length;
+    }
+    focusSearchMatch();
+  }
+
+  if (e.key === 'Escape') {
+    this.value = '';
+    runSearch('');
+    this.blur();
+  }
 });
 
 // ── TOOLTIP ───────────────────────────────────────────────────────────────────
