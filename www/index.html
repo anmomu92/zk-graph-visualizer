@@ -4,7 +4,62 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZK Graph View</title>
-  <link rel="stylesheet" href="zk-graph-viewer.css">
+  <script>
+    // Fetch Last-Modified for a local file and return it as a version string.
+    // Falls back to Date.now() if the header is missing.
+    async function assetVersion(path) {
+      try {
+        const res = await fetch(path, { method: 'HEAD', cache: 'no-store' });
+        const lm  = res.headers.get('Last-Modified');
+        return lm ? new Date(lm).getTime() : Date.now();
+      } catch { return Date.now(); }
+    }
+
+    // Inject <link> or <script> with a cache-busting query string.
+    function injectCSS(href)  {
+      const el = document.createElement('link');
+      el.rel = 'stylesheet'; el.href = href;
+      document.head.appendChild(el);
+    }
+    function injectJS(src) {
+      return new Promise(resolve => {
+        const el = document.createElement('script');
+        el.src = src;
+        el.onload = resolve;
+        document.head.appendChild(el);
+      });
+    }
+
+    // Boot sequence: version-stamp local assets, then load in order.
+    (async () => {
+      const [cssV, jsV] = await Promise.all([
+        assetVersion('zk-graph-viewer.css'),
+        assetVersion('zk-graph-viewer.js'),
+      ]);
+
+      injectCSS(`zk-graph-viewer.css?v=${cssV}`);
+
+      // MathJax must be configured before its script loads
+      window.MathJax = {
+        tex: {
+          inlineMath:  [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+          processEscapes: true
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        },
+        startup: { typeset: false }
+      };
+
+      // D3 and MathJax can load in parallel; our JS must come last
+      await Promise.all([
+        injectJS('https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js'),
+        injectJS('https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js'),
+      ]);
+      await injectJS(`zk-graph-viewer.js?v=${jsV}`);
+    })();
+  </script>
 </head>
 <body>
 
@@ -79,23 +134,5 @@
 
 <div id="tooltip"></div>
 
-<script>
-  // MathJax config — must be set before the MathJax script loads
-  window.MathJax = {
-    tex: {
-      inlineMath:  [['$', '$'], ['\\(', '\\)']],
-      displayMath: [['$$', '$$'], ['\\[', '\\]']],
-      processEscapes: true
-    },
-    options: {
-      // Only typeset elements we explicitly target, not the whole page
-      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-    },
-    startup: { typeset: false }   // we call typesetPromise() manually
-  };
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script src="zk-graph-viewer.js"></script>
 </body>
 </html>
