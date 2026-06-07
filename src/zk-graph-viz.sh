@@ -21,4 +21,4 @@ else
 fi
 
 # Open the browser
-${BROWSER} "http://127.0.0.1:8000/"
+# ${BROWSER} "http://127.0.0.1:8000/"
