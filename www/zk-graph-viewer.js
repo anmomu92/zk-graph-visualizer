@@ -93,22 +93,18 @@ function buildGraph(rawLinks) {
         links: [],
       });
     }
-    nodeMap
-      .get(l.sourceId)
-      .links.push({
-        dir: "out",
-        targetId: l.targetId,
-        snippet: l.snippet,
-        title: l.title,
-      });
-    nodeMap
-      .get(l.targetId)
-      .links.push({
-        dir: "in",
-        targetId: l.sourceId,
-        snippet: l.snippet,
-        title: l.title,
-      });
+    nodeMap.get(l.sourceId).links.push({
+      dir: "out",
+      targetId: l.targetId,
+      snippet: l.snippet,
+      title: l.title,
+    });
+    nodeMap.get(l.targetId).links.push({
+      dir: "in",
+      targetId: l.sourceId,
+      snippet: l.snippet,
+      title: l.title,
+    });
   });
 
   allNodes = Array.from(nodeMap.values());
@@ -856,7 +852,7 @@ function renderMd(raw) {
   s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`);
 
   // ── STEP 7: wiki-links [[stem]]
-  s = s.replace(/\[\[([^\]]+)\]\]/g, (_, stem) => {
+  s = s.replace(/\[\{*\[([^\]]+)\]\}*\]/g, (_, stem) => {
     const node = allNodes.find((n) => n.stem === stem);
     const res = node ? " resolved" : "";
     const label =
