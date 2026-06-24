@@ -28,19 +28,20 @@ This is a graph visualizer that works along zk-org.
 
 Just clone this repository...
 
-```
-git clone https://github.com/anmomu92/nvimm92.git ~/.config/nvim && nvim
+```bash
+git clone https://github.com/anmomu92/zk-graph-viz.git
 ```
 
-...and run the install script:
+...and, within the cloned repository, run the install script:
 
-```
+```bash
+cd zk-graph-viz
 ./install.sh
 ```
 
 ## Contributions
 
-Any kind of suggestion or improvement is suggested. Please, open an issue or merge request to discuss changes.
+Any kind of suggestion or improvement is appreciated. Please, open an issue or merge request to discuss changes.
 
 ## License
 
