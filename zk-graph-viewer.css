@@ -8,18 +8,43 @@
   --node-default: #3d7fff;
   --node-hub: #ff6b35;
   --node-selected: #e6a817;
-  --node-connected: #2bb87a;
   --link-color: rgba(100, 130, 200, 0.35);
   --link-hover: rgba(230, 168, 23, 0.6);
   --text-primary: #e8ecf4;
   --text-secondary: #8892aa;
   --accent: #3d7fff;
   --node-selected-glow: rgba(230, 168, 23, 0.8);
-  --node-connected-glow: rgba(43, 184, 122, 0.5);
   --node-hub-glow: rgba(255, 107, 53, 0.6);
   --node-default-glow: rgba(61, 127, 255, 0.4);
   --node-hub-stroke: rgba(255, 107, 53, 0.5);
   --node-default-stroke: rgba(61, 127, 255, 0.4);
+
+  /* neighbours of the selected node, by link direction */
+  --node-in:        #a78bfa;   /* references the selected note  → placed above */
+  --node-out:       #2bb87a;   /* referenced by the selected one → placed below */
+  --node-both:      #22d3ee;   /* references in both directions  → placed aside */
+  --node-in-glow:   rgba(167, 139, 250, 0.55);
+  --node-out-glow:  rgba(43, 184, 122, 0.55);
+  --node-both-glow: rgba(34, 211, 238, 0.55);
+  --edge-in:        rgba(167, 139, 250, 0.75);
+  --edge-out:       rgba(43, 184, 122, 0.75);
+  --edge-both:      rgba(34, 211, 238, 0.75);
+
+  /* wiki-link chips — unresolved (target not in graph) */
+  --wl-fg: #6f9dff;
+  --wl-bg: rgba(61, 127, 255, 0.12);
+  --wl-bg-hover: rgba(61, 127, 255, 0.25);
+  --wl-border: rgba(61, 127, 255, 0.35);
+  /* wiki-link chips — resolved (target exists in graph) */
+  --wl-res-fg: #7bffb0;
+  --wl-res-bg: rgba(123, 255, 176, 0.08);
+  --wl-res-bg-hover: rgba(123, 255, 176, 0.18);
+  --wl-res-border: rgba(123, 255, 176, 0.3);
+  /* wiki-link chips — brace-wrapped {[[link]]} (no graph edge) */
+  --wl-brace-fg: #c792ea;
+  --wl-brace-bg: rgba(199, 146, 234, 0.1);
+  --wl-brace-bg-hover: rgba(199, 146, 234, 0.22);
+  --wl-brace-border: rgba(199, 146, 234, 0.35);
 }
 
 @media (prefers-color-scheme: light) {
@@ -31,18 +56,42 @@
     --node-default: #2563eb;
     --node-hub: #ea580c;
     --node-selected: #b45309;
-    --node-connected: #16a34a;
     --link-color: rgba(60, 90, 160, 0.25);
     --link-hover: rgba(180, 83, 9, 0.55);
     --text-primary: #1a1f2e;
     --text-secondary: #5a6178;
     --accent: #2563eb;
     --node-selected-glow: rgba(180, 83, 9, 0.5);
-    --node-connected-glow: rgba(22, 163, 74, 0.4);
     --node-hub-glow: rgba(234, 88, 12, 0.45);
     --node-default-glow: rgba(37, 99, 235, 0.35);
     --node-hub-stroke: rgba(234, 88, 12, 0.4);
     --node-default-stroke: rgba(37, 99, 235, 0.35);
+
+    --node-in:        #7c3aed;
+    --node-out:       #15803d;
+    --node-both:      #0e7490;
+    --node-in-glow:   rgba(124, 58, 237, 0.4);
+    --node-out-glow:  rgba(21, 128, 61, 0.4);
+    --node-both-glow: rgba(14, 116, 144, 0.4);
+    --edge-in:        rgba(124, 58, 237, 0.7);
+    --edge-out:       rgba(21, 128, 61, 0.7);
+    --edge-both:      rgba(14, 116, 144, 0.7);
+
+    /* darker inks so chips stay readable on a white panel */
+    --wl-fg: #1d4ed8;
+    --wl-bg: rgba(37, 99, 235, 0.09);
+    --wl-bg-hover: rgba(37, 99, 235, 0.18);
+    --wl-border: rgba(37, 99, 235, 0.35);
+
+    --wl-res-fg: #15803d;
+    --wl-res-bg: rgba(21, 128, 61, 0.08);
+    --wl-res-bg-hover: rgba(21, 128, 61, 0.16);
+    --wl-res-border: rgba(21, 128, 61, 0.35);
+
+    --wl-brace-fg: #6d28d9;
+    --wl-brace-bg: rgba(109, 40, 217, 0.08);
+    --wl-brace-bg-hover: rgba(109, 40, 217, 0.16);
+    --wl-brace-border: rgba(109, 40, 217, 0.35);
   }
 }
 
@@ -419,17 +468,36 @@ body {
 .md-table tr:last-child td { border-bottom: none; }
 .md-table tbody tr:hover { background: var(--surface2); }
 
+/* wiki-link chips */
 .md-content .wikilink {
-  display: inline-block; background: rgba(61,127,255,0.12); color: var(--accent);
-  border: 1px solid rgba(61,127,255,0.3); border-radius: 4px; padding: 0 6px;
+  display: inline-block;
+  background: var(--wl-bg);
+  color: var(--wl-fg);
+  border: 1px solid var(--wl-border);
+  border-radius: 4px; padding: 0 6px;
   font-family: 'JetBrains Mono', monospace; font-size: 10px; cursor: pointer;
   transition: background 0.15s; vertical-align: middle; margin: 1px 2px;
 }
-.md-content .wikilink:hover { background: rgba(61,127,255,0.25); }
+.md-content .wikilink:hover { background: var(--wl-bg-hover); }
+
+/* resolved — target exists as a node in the graph */
 .md-content .wikilink.resolved {
-  color: #7bffb0; border-color: rgba(123,255,176,0.3); background: rgba(123,255,176,0.08);
+  color: var(--wl-res-fg);
+  border-color: var(--wl-res-border);
+  background: var(--wl-res-bg);
 }
-.md-content .wikilink.resolved:hover { background: rgba(123,255,176,0.18); }
+.md-content .wikilink.resolved:hover { background: var(--wl-res-bg-hover); }
+
+/* brace-wrapped {[[link]]} — navigable, but creates no graph edge */
+.md-content .wikilink.braced,
+.md-content .wikilink.braced.resolved {
+  color: var(--wl-brace-fg);
+  border-color: var(--wl-brace-border);
+  background: var(--wl-brace-bg);
+  border-style: dashed;
+}
+.md-content .wikilink.braced:hover,
+.md-content .wikilink.braced.resolved:hover { background: var(--wl-brace-bg-hover); }
 
 .no-content {
   text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 12px;
@@ -454,9 +522,11 @@ body {
 .conn-title { font-size: 11px; color: var(--accent); word-break: break-word; }
 .conn-stem  { font-size: 10px; color: var(--text-secondary); }
 .conn-snippet { font-size: 10px; color: var(--text-secondary); margin-top: 3px; font-style: italic; line-height: 1.4; }
-.conn-dir { margin-left: auto; font-size: 9px; padding: 2px 5px; border-radius: 3px; flex-shrink: 0; }
-.dir-out { background: rgba(61,127,255,0.15); color: var(--node-default); }
-.dir-in  { background: rgba(123,255,176,0.15); color: var(--node-connected); }
+/* direction badges mirror the graph: 'in' = above/violet, 'out' = below/green */
+.conn-dir { margin-left: auto; font-size: 9px; padding: 1px 5px; border-radius: 3px;
+            flex-shrink: 0; background: transparent; border: 1px solid currentColor; }
+.dir-out { color: var(--node-out); }
+.dir-in  { color: var(--node-in); }
 
 .stat-row {
   display: flex; justify-content: space-between; align-items: center;
