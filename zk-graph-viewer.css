@@ -1,6 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
+  --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-heading: 'Manrope', 'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --bg: #0d0f14;
   --surface: #13161e;
   --surface2: #1a1e2a;
@@ -45,6 +49,29 @@
   --wl-brace-bg: rgba(199, 146, 234, 0.1);
   --wl-brace-bg-hover: rgba(199, 146, 234, 0.22);
   --wl-brace-border: rgba(199, 146, 234, 0.35);
+
+  /* reading surface (the note panel) */
+  --text-body:      #dce2ee;   /* a touch softer than pure white for long reads */
+  --heading:        #f4f6fa;
+  --heading-2:      #f4f6fa;
+  --heading-3:      #9fb4ff;   /* tinted so h3 reads as a label, not a list item */
+  --strong:         #ffffff;
+  --code-fg:        #d3dcf3;
+  --code-bg:        rgba(255, 255, 255, 0.055);
+  --code-border:    rgba(255, 255, 255, 0.09);
+  --quote-fg:       #aab4c8;
+  --fold-bar:       rgba(255, 255, 255, 0.045);
+  --fold-bar-hover: rgba(255, 255, 255, 0.08);
+  --fold-rule:      rgba(255, 255, 255, 0.14);
+  --table-head-bg:  rgba(255, 255, 255, 0.05);
+
+  --callout-note-fg: #8fb2ff;
+  --callout-tip-fg:  #6ee7a8;
+  --callout-warn-fg: #fbbf24;
+  --callout-imp-fg:  #fb923c;
+
+  --ok-fg:  #6ee7a8; --ok-border: rgba(110,231,168,0.4); --ok-bg: rgba(110,231,168,0.08);
+  --err-fg: #fca5a5; --err-border: rgba(252,165,165,0.4); --err-bg: rgba(252,165,165,0.08);
 }
 
 @media (prefers-color-scheme: light) {
@@ -92,6 +119,28 @@
     --wl-brace-bg: rgba(109, 40, 217, 0.08);
     --wl-brace-bg-hover: rgba(109, 40, 217, 0.16);
     --wl-brace-border: rgba(109, 40, 217, 0.35);
+
+    --text-body:      #1f2937;
+    --heading:        #0f172a;
+    --heading-2:      #0f172a;
+    --heading-3:      #3b4fbf;
+    --strong:         #0b1220;
+    --code-fg:        #1e293b;
+    --code-bg:        #eef1f6;
+    --code-border:    #dfe4ee;
+    --quote-fg:       #4b5563;
+    --fold-bar:       rgba(15, 23, 42, 0.04);
+    --fold-bar-hover: rgba(15, 23, 42, 0.075);
+    --fold-rule:      rgba(15, 23, 42, 0.16);
+    --table-head-bg:  rgba(15, 23, 42, 0.045);
+
+    --callout-note-fg: #1d4ed8;
+    --callout-tip-fg:  #15803d;
+    --callout-warn-fg: #b45309;
+    --callout-imp-fg:  #c2410c;
+
+    --ok-fg:  #15803d; --ok-border: rgba(21,128,61,0.4);  --ok-bg: rgba(21,128,61,0.07);
+    --err-fg: #b91c1c; --err-border: rgba(185,28,28,0.4); --err-bg: rgba(185,28,28,0.07);
   }
 }
 
@@ -100,7 +149,7 @@
 body {
   background: var(--bg);
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   height: 100vh;
   overflow: hidden;
   display: flex;
@@ -120,11 +169,11 @@ body {
   z-index: 100;
 }
 #topbar .logo {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-heading);
   font-weight: 800;
   font-size: 16px;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
+  color: var(--heading);
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 #topbar .logo span { color: var(--accent); }
@@ -143,7 +192,7 @@ body {
   border-radius: 6px;
   padding: 6px 48px 6px 32px;
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   outline: none;
   transition: border-color 0.2s;
@@ -166,7 +215,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   padding: 6px 14px;
   cursor: pointer;
@@ -188,8 +237,8 @@ body {
   white-space: nowrap;
   transition: all 0.3s;
 }
-#status-pill.ok  { border-color: rgba(123,255,176,0.4); color: #7bffb0; background: rgba(123,255,176,0.07); }
-#status-pill.err { border-color: rgba(255,80,80,0.4);   color: #ff8080; background: rgba(255,80,80,0.07); }
+#status-pill.ok  { border-color: var(--ok-border);  color: var(--ok-fg);  background: var(--ok-bg); }
+#status-pill.err { border-color: var(--err-border); color: var(--err-fg); background: var(--err-bg); }
 
 .topbar-stats { margin-left: auto; display: flex; gap: 20px; font-size: 11px; color: var(--text-secondary); }
 .topbar-stats span { white-space: nowrap; }
@@ -208,12 +257,27 @@ body {
 
 .node circle { stroke-width: 2px; cursor: pointer; transition: r 0.15s, filter 0.2s; }
 .node text {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   fill: var(--text-secondary);
   pointer-events: none;
   user-select: none;
+  transition: font-size 0.2s, fill 0.2s;
 }
+
+/* the selected node's label: larger, heading face, coloured to match the
+   node, with a background-coloured halo so it stays legible over edges */
+.node.selected text {
+  font-family: var(--font-heading);
+  font-size: 13.5px;
+  font-weight: 700;
+  fill: var(--node-selected);
+  paint-order: stroke fill;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.node.selected circle { stroke: var(--node-selected); stroke-width: 3px; }
 
 /* ── HINT OVERLAY (qutebrowser f-hints) ── */
 #hint-overlay {
@@ -241,6 +305,35 @@ body {
   position: absolute; bottom: 20px; left: 20px;
   display: flex; flex-direction: column; gap: 6px; z-index: 50;
 }
+
+/* animation speed slider, to the right of the control column */
+#anim-ctl {
+  position: absolute; bottom: 20px; left: 66px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 10px; z-index: 50;
+  font-family: var(--font-ui); font-size: 11px; color: var(--text-secondary);
+}
+#anim-ctl label { white-space: nowrap; cursor: default; }
+#anim-ctl input[type=range] {
+  width: 110px; height: 3px; margin: 0;
+  -webkit-appearance: none; appearance: none;
+  background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+}
+#anim-ctl input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--surface); cursor: pointer;
+}
+#anim-ctl input[type=range]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--surface); cursor: pointer;
+}
+#anim-speed-val {
+  min-width: 30px; text-align: right;
+  font-family: var(--font-mono); color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
 .ctrl-btn {
   width: 36px; height: 36px;
   background: var(--surface);
@@ -252,6 +345,8 @@ body {
   transition: all 0.15s;
 }
 .ctrl-btn:hover { background: var(--surface2); color: var(--text-primary); border-color: var(--accent); }
+.ctrl-btn:disabled { opacity: 0.35; cursor: default; }
+.ctrl-btn:disabled:hover { background: var(--surface); color: var(--text-secondary); border-color: var(--border); }
 
 /* ── LEGEND ── */
 #legend {
@@ -263,7 +358,7 @@ body {
   font-size: 11px; color: var(--text-secondary); z-index: 50;
 }
 #legend .legend-title {
-  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 600;
+  font-family: var(--font-heading); font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 1px;
   color: var(--text-secondary); margin-bottom: 8px;
 }
@@ -274,7 +369,7 @@ body {
 #panel {
   width: 0;
   min-width: 0;
-  max-width: 780px;
+  max-width: 50vw;            /* never more than half the screen */
   background: var(--surface);
   border-left: 0px solid var(--border);
   display: flex; flex-direction: column;
@@ -286,7 +381,7 @@ body {
   position: relative;
 }
 #panel.open {
-  width: 400px;
+  width: 33vw;                /* JS sets an exact px width; this is the fallback */
   min-width: 260px;
   border-left-width: 1px;
 }
@@ -314,10 +409,14 @@ body {
   gap: 12px; flex-shrink: 0;
 }
 #panel-title {
-  font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700;
-  line-height: 1.3; color: var(--text-primary); word-break: break-word;
+  font-family: var(--font-heading); font-size: 17px; font-weight: 800;
+  line-height: 1.3; letter-spacing: -0.012em;
+  color: var(--heading); word-break: break-word;
 }
-#panel-stem { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
+#panel-stem {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-secondary); margin-top: 5px; opacity: 0.9;
+}
 #panel-close {
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer;
@@ -330,8 +429,8 @@ body {
 .tab-btn {
   flex: 1; padding: 9px 0; background: none; border: none;
   border-bottom: 2px solid transparent; color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;
-  transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.5px;
+  font-family: var(--font-ui); font-size: 11.5px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.06em;
 }
 .tab-btn:hover { color: var(--text-primary); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -345,84 +444,169 @@ body {
 
 /* ── MARKDOWN ── */
 .md-content {
-  font-family: 'Lora', serif; font-size: 13px; line-height: 1.75; color: var(--text-primary);
-}
-.md-content h1 {
-  font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700;
-  color: var(--text-primary); margin: 0 0 14px;
-  padding-bottom: 10px; border-bottom: 1px solid var(--border);
-}
-.md-content h2 {
-  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600;
-  color: var(--text-primary); margin: 18px 0 8px;
-}
-.md-content h3 {
-  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
-  color: var(--text-secondary); margin: 14px 0 6px;
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--text-body);
+  font-feature-settings: 'cv11', 'ss01', 'calt';   /* Inter: open a, single-storey g */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* foldable sections */
-.md-content details { margin: 4px 0; }
-.md-content details + details { margin-top: 2px; }
+/* headings — Manrope, open letterforms, generous line-height so nothing feels crushed */
+.md-content h1 {
+  font-family: var(--font-heading);
+  font-size: 21px; font-weight: 800;
+  line-height: 1.3; letter-spacing: -0.012em;
+  color: var(--heading);
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.md-content h2 {
+  font-family: var(--font-heading);
+  font-size: 16px; font-weight: 700;
+  line-height: 1.35; letter-spacing: -0.005em;
+  color: var(--heading-2);
+  margin: 22px 0 10px;
+}
+.md-content h3 {
+  font-family: var(--font-heading);
+  font-size: 12.5px; font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--heading-3);
+  margin: 18px 0 8px;
+}
+
+/* ── foldable sections ─────────────────────────────────────────────────────
+   The summary is styled as a full-width header bar with the disclosure
+   chevron on the right, so it can't be mistaken for a bulleted list item.
+   The revealed content sits below a clear gap and behind a thin guide rule. */
+.md-content details { margin: 10px 0 6px; }
+.md-content details + details { margin-top: 6px; }
 
 .md-content summary {
   list-style: none;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 4px;
-  padding: 3px 4px;
-  margin: 0 -4px;
-  transition: background 0.15s;
+  display: block;
+  position: relative;
+  padding: 8px 34px 8px 12px;         /* room on the right for the chevron */
+  margin: 0;
+  border-radius: 7px;
+  background: var(--fold-bar);
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
   user-select: none;
 }
 .md-content summary::-webkit-details-marker { display: none; }
-.md-content summary::before {
-  content: '▶';
-  font-size: 8px;
-  color: var(--text-secondary);
-  transition: transform 0.2s;
-  flex-shrink: 0;
-  width: 10px;
-  text-align: center;
-}
-.md-content details[open] > summary::before { transform: rotate(90deg); }
-.md-content summary:hover { background: var(--surface2); }
+.md-content summary::marker { content: ''; }
+.md-content summary:hover { background: var(--fold-bar-hover); }
+.md-content summary:focus-visible { outline: none; border-color: var(--accent); }
 
-/* preserve heading styles inside summary */
+/* chevron, right-aligned */
+.md-content summary::after {
+  content: '';
+  position: absolute;
+  right: 14px; top: 50%;
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: translateY(-60%) rotate(-45deg);      /* points right when closed */
+  transition: transform 0.2s ease;
+  opacity: 0.85;
+}
+.md-content details[open] > summary::after { transform: translateY(-70%) rotate(45deg); }   /* points down */
+
+/* heading typography inside the summary bar */
 .md-content summary[data-level="2"] {
-  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600;
-  color: var(--text-primary); margin-top: 14px;
+  font-family: var(--font-heading);
+  font-size: 15.5px; font-weight: 700;
+  line-height: 1.35; letter-spacing: -0.005em;
+  color: var(--heading-2);
 }
 .md-content summary[data-level="3"] {
-  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
-  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-size: 12.5px; font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--heading-3);
+  padding-top: 6px; padding-bottom: 6px;
 }
 
-/* indent the body of each fold */
-.md-content details > :not(summary) { margin-left: 16px; }
-.md-content p { margin: 0 0 10px; }
+/* the revealed content: clear breathing room, plus a guide rule tying it to its header */
+.md-content .fold-body {
+  margin: 12px 0 4px 10px;
+  padding-left: 14px;
+  border-left: 2px solid var(--fold-rule);
+}
+.md-content .fold-body > :first-child { margin-top: 0; }
+.md-content .fold-body > :last-child  { margin-bottom: 0; }
+
+/* nested folds sit a little tighter */
+.md-content .fold-body details { margin: 8px 0 4px; }
+
+/* ── body elements ── */
+.md-content p { margin: 0 0 12px; }
+.md-content strong { color: var(--strong); font-weight: 600; }
+.md-content em { font-style: italic; }
+
 .md-content ul,
-.md-content ol { margin: 0 0 10px 20px; padding-left: 0; }
-.md-content li { margin-bottom: 4px; }
+.md-content ol { margin: 0 0 12px 22px; padding-left: 0; }
+.md-content li { margin-bottom: 5px; }
+.md-content li::marker { color: var(--text-secondary); }
 .md-content li > ul,
-.md-content li > ol { margin: 4px 0 4px 20px; }
+.md-content li > ol { margin: 5px 0 5px 20px; }
+
+/* an indented, non-bullet line that annotates its list item */
+.md-content .li-cont {
+  margin: 4px 0 7px 2px;
+  padding-left: 11px;
+  border-left: 1px solid var(--fold-rule);
+  color: var(--text-secondary);
+  font-size: 0.94em;
+  line-height: 1.6;
+}
+.md-content li > .li-cont:last-child { margin-bottom: 2px; }
+
 .md-content code {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 3px; padding: 1px 5px; color: #b5c4e8;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--code-fg);
 }
 .md-content pre {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 12px; margin: 0 0 12px; overflow-x: auto;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 7px;
+  padding: 12px 14px; margin: 0 0 14px;
+  overflow-x: auto;
+  line-height: 1.55;
 }
-.md-content pre code { background: none; border: none; padding: 0; font-size: 11px; }
+.md-content pre code { background: none; border: none; padding: 0; font-size: 12px; }
+
 .md-content blockquote {
-  border-left: 3px solid var(--accent); margin: 0 0 10px;
-  padding: 4px 12px; color: var(--text-secondary); font-style: italic;
+  border-left: 3px solid var(--accent);
+  margin: 0 0 12px;
+  padding: 6px 14px;
+  color: var(--quote-fg);
+  /* upright by default; *italic* in the source still renders italic */
 }
-.md-content hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+/* paragraph breaks inside a quote (a bare ">" line in the source); line
+   breaks and leading indentation are preserved as written */
+.md-content blockquote p,
+.callout-body p {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  tab-size: 4;
+}
+.md-content blockquote p:last-child,
+.callout-body p:last-child { margin-bottom: 0; }
+.md-content blockquote strong { color: var(--text-body); }
+.md-content hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
 
 /* callouts (Obsidian > [!NOTE] style) */
 .callout {
@@ -430,38 +614,44 @@ body {
   padding: 10px 14px; border-left: 3px solid;
 }
 .callout-title {
-  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
-  margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-family: var(--font-heading); font-size: 11.5px; font-weight: 700;
+  margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.07em;
 }
-.callout-body { font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+.callout-body { font-size: 13.5px; line-height: 1.65; color: var(--text-body); }
 .callout-note, .callout-info {
   background: rgba(61,127,255,0.07); border-color: rgba(61,127,255,0.5);
 }
-.callout-note .callout-title, .callout-info .callout-title { color: #7ba8ff; }
+.callout-note .callout-title, .callout-info .callout-title { color: var(--callout-note-fg); }
 .callout-tip {
   background: rgba(123,255,176,0.07); border-color: rgba(123,255,176,0.5);
 }
-.callout-tip .callout-title { color: #7bffb0; }
+.callout-tip .callout-title { color: var(--callout-tip-fg); }
 .callout-warning, .callout-caution {
   background: rgba(255,193,7,0.07); border-color: rgba(255,193,7,0.5);
 }
-.callout-warning .callout-title, .callout-caution .callout-title { color: #ffc107; }
+.callout-warning .callout-title, .callout-caution .callout-title { color: var(--callout-warn-fg); }
 .callout-important {
   background: rgba(255,107,53,0.07); border-color: rgba(255,107,53,0.5);
 }
-.callout-important .callout-title { color: #ff6b35; }
+.callout-important .callout-title { color: var(--callout-imp-fg); }
 
 /* tables */
 .md-table-wrap { overflow-x: auto; margin: 0 0 14px; border-radius: 6px; border: 1px solid var(--border); }
-.md-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
-.md-table thead { background: var(--surface2); }
+.md-table {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--font-ui); font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.md-table thead { background: var(--table-head-bg); }
 .md-table th {
-  padding: 7px 12px; text-align: left; font-weight: 600;
-  color: var(--text-primary); border-bottom: 1px solid var(--border);
+  padding: 8px 12px; text-align: left;
+  font-size: 11.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--heading); border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 .md-table td {
-  padding: 6px 12px; color: var(--text-secondary);
+  padding: 7px 12px; color: var(--text-body);
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
@@ -475,7 +665,7 @@ body {
   color: var(--wl-fg);
   border: 1px solid var(--wl-border);
   border-radius: 4px; padding: 0 6px;
-  font-family: 'JetBrains Mono', monospace; font-size: 10px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 10px; cursor: pointer;
   transition: background 0.15s; vertical-align: middle; margin: 1px 2px;
 }
 .md-content .wikilink:hover { background: var(--wl-bg-hover); }
@@ -507,8 +697,9 @@ body {
 
 /* ── LINKS TAB ── */
 .section-label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--text-secondary); margin: 0 0 10px; font-weight: 500;
+  font-family: var(--font-ui);
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--text-secondary); margin: 0 0 10px; font-weight: 600;
 }
 .mt { margin-top: 18px; }
 
@@ -519,9 +710,9 @@ body {
 }
 .connection-item:hover { background: var(--surface2); border-color: var(--border); }
 .conn-arrow { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; padding-top: 2px; }
-.conn-title { font-size: 11px; color: var(--accent); word-break: break-word; }
-.conn-stem  { font-size: 10px; color: var(--text-secondary); }
-.conn-snippet { font-size: 10px; color: var(--text-secondary); margin-top: 3px; font-style: italic; line-height: 1.4; }
+.conn-title { font-family: var(--font-ui); font-size: 13px; font-weight: 500; color: var(--accent); word-break: break-word; }
+.conn-stem  { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-secondary); margin-top: 1px; }
+.conn-snippet { font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-style: italic; line-height: 1.5; }
 /* direction badges mirror the graph: 'in' = above/violet, 'out' = below/green */
 .conn-dir { margin-left: auto; font-size: 9px; padding: 1px 5px; border-radius: 3px;
             flex-shrink: 0; background: transparent; border: 1px solid currentColor; }
@@ -542,7 +733,7 @@ body {
   text-align: center; pointer-events: none; z-index: 5; opacity: 0.5;
 }
 #empty-hint .hint-icon { font-size: 48px; margin-bottom: 12px; }
-#empty-hint h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+#empty-hint h2 { font-family: var(--font-heading); font-size: 20px; font-weight: 700; margin-bottom: 8px; }
 #empty-hint p { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
 
 /* ── TOOLTIP ── */

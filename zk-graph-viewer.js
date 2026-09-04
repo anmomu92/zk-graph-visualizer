@@ -5,10 +5,13 @@ let simulation, zoomBehavior;
 let selectedNode = null;
 let selectionGroups = new Map();  // node id → 'self' | 'in' | 'out' | 'both' | null
 let bracedLinkCount = 0;   // {[[...]]} refs skipped when building the graph
+let animDuration = 900;    // ms the neighbour rearrangement takes; 0 = snap
+let arrangeTimer = null;   // the running d3.timer for that rearrangement, if any
 
 const svg     = d3.select('#svg');
 const tooltip = document.getElementById('tooltip');
 const panel   = document.getElementById('panel');
+const hintOverlay = document.getElementById('hint-overlay');
 
 // ── AUTO-LOAD via fetch ───────────────────────────────────────────────────────
 const statusPill = document.getElementById('status-pill');
@@ -56,9 +59,6 @@ async function loadAll() {
   reloadBtn.textContent = '↺ Reload';
 }
 
-reloadBtn.addEventListener('click', loadAll);
-initControls();
-loadAll();
 
 // ── BRACED LINK DETECTION ─────────────────────────────────────────────────────
 // A link written as {[[target]]} is treated as a "soft" reference: it stays
@@ -149,6 +149,7 @@ function renderGraph() {
   selectedNode = null;
   panel.classList.remove('open');
   panel.style.width = '';
+  syncToggleBtn();
 
   const cont = document.getElementById('graph-container');
   const W = cont.clientWidth, H = cont.clientHeight;
@@ -165,7 +166,7 @@ function renderGraph() {
   const nodeSel = g.append('g').selectAll('g')
     .data(allNodes, d => d.id).join('g').attr('class', 'node')
     .call(d3.drag()
-      .on('start', (e,d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('start', (e,d) => { stopArrangeAnimation(); if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
       .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
       .on('end',   (e,d) => { if (!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; })
     );
@@ -221,11 +222,24 @@ function initControls() {
   };
   document.getElementById('panel-toggle').onclick = () => {
     if (panel.classList.contains('open')) {
-      closePanel();
+      hidePanel();                 // keep the selection and the arrangement
     } else if (selectedNode) {
-      openPanel();
+      openPanel();                 // same note, same content, just shown again
     }
   };
+
+  // Animation speed slider — value is the rearrangement duration in ms.
+  // Guarded: if the installed HTML predates the slider, keep the default.
+  const slider  = document.getElementById('anim-speed');
+  const readout = document.getElementById('anim-speed-val');
+  if (slider) {
+    const applySpeed = () => {
+      animDuration = +slider.value;
+      if (readout) readout.textContent = animDuration === 0 ? 'off' : (animDuration / 1000).toFixed(1) + 's';
+    };
+    slider.addEventListener('input', applySpeed);
+    applySpeed();
+  }
 }
 
 function truncLabel(s) {
@@ -238,7 +252,6 @@ function truncLabel(s) {
 // f-hint mode can target them. Positions are kept in sync with the simulation
 // and the current zoom/pan transform.
 
-const hintOverlay = document.getElementById('hint-overlay');
 
 function buildHintOverlay(nodeSel) {
   hintOverlay.innerHTML = '';
@@ -263,7 +276,6 @@ hintOverlay.addEventListener('click', e => {
   const n  = allNodes.find(x => x.id === id);
   if (!n) return;
   selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
-  panToNode(n);
 });
 
 function updateHintOverlay() {
@@ -283,7 +295,6 @@ function updateHintOverlay() {
   });
 }
 
-// ── SELECTION ─────────────────────────────────────────────────────────────────
 // ── NEIGHBOUR LAYOUT ──────────────────────────────────────────────────────────
 // When a node is selected its direct neighbours are pinned into arcs around it:
 //   above  — notes that reference the selected one (incoming)
@@ -296,7 +307,10 @@ const LAYOUT_RADIUS    = 165;  // distance of the first ring from the selected n
 const LAYOUT_RING_GAP  = 95;   // extra distance for each additional ring
 const LAYOUT_SPREAD    = 130;  // angular width of an arc, in degrees
 
-function placeArc(nodes, cx, cy, centreDeg) {
+// Computes where every node in `nodes` should go and records it in `targets`
+// (node → {x, y}). Nothing is pinned here; the caller decides whether to snap
+// the pins into place or animate them there.
+function placeArc(nodes, cx, cy, centreDeg, targets) {
   const rings = Math.ceil(nodes.length / LAYOUT_RING_SIZE);
   for (let r = 0; r < rings; r++) {
     const slice  = nodes.slice(r * LAYOUT_RING_SIZE, (r + 1) * LAYOUT_RING_SIZE);
@@ -306,8 +320,7 @@ function placeArc(nodes, cx, cy, centreDeg) {
     slice.forEach((n, i) => {
       const t   = slice.length === 1 ? 0 : (i / (slice.length - 1)) - 0.5;
       const ang = (centreDeg + t * spread) * Math.PI / 180;
-      n.fx = cx + radius * Math.cos(ang);
-      n.fy = cy + radius * Math.sin(ang);
+      targets.set(n, { x: cx + radius * Math.cos(ang), y: cy + radius * Math.sin(ang) });
     });
   }
 }
@@ -316,23 +329,63 @@ function releasePins() {
   allNodes.forEach(n => { n.fx = null; n.fy = null; });
 }
 
+// ── ANIMATION ─────────────────────────────────────────────────────────────────
+// animDuration is how long (ms) the neighbour rearrangement takes; 0 snaps.
+// The camera pan derives its own duration from it so the two motions feel
+// like one gesture.
+
+function stopArrangeAnimation() {
+  if (arrangeTimer) { arrangeTimer.stop(); arrangeTimer = null; }
+  if (simulation) simulation.alphaTarget(0);
+}
+
 function arrangeNeighbours(d, incoming, outgoing, both) {
+  stopArrangeAnimation();
   releasePins();
 
-  // Anchor the selected node where it already is, so the view doesn't jump
+  // Anchor the selected node where it already is; the camera comes to it
   const cx = d.x, cy = d.y;
   d.fx = cx; d.fy = cy;
 
+  const targets = new Map();
   // SVG y grows downwards: -90° is straight up, +90° straight down
-  placeArc(incoming, cx, cy, -90);
-  placeArc(outgoing, cx, cy,  90);
-
+  placeArc(incoming, cx, cy, -90, targets);
+  placeArc(outgoing, cx, cy,  90, targets);
   // Bidirectional links go out to the sides, split evenly left and right
   const half = Math.ceil(both.length / 2);
-  placeArc(both.slice(0, half), cx, cy,   0);   // right
-  placeArc(both.slice(half),    cx, cy, 180);   // left
+  placeArc(both.slice(0, half), cx, cy,   0, targets);   // right
+  placeArc(both.slice(half),    cx, cy, 180, targets);   // left
 
-  if (simulation) simulation.alpha(0.75).restart();
+  if (!simulation) return;
+
+  if (animDuration <= 0) {
+    targets.forEach((t, n) => { n.fx = t.x; n.fy = t.y; });
+    simulation.alpha(0.75).restart();
+    return;
+  }
+
+  // Tween each pin from where its node is now to its target. Keeping the
+  // simulation warm (alphaTarget > 0) means the links and the unrelated nodes
+  // react continuously while the pins travel, so the rearrangement is visible
+  // rather than a jump cut.
+  const starts = new Map();
+  targets.forEach((_, n) => { starts.set(n, { x: n.x, y: n.y }); n.fx = n.x; n.fy = n.y; });
+  simulation.alphaTarget(0.3).restart();
+
+  const dur = animDuration;
+  arrangeTimer = d3.timer(elapsed => {
+    const t = Math.min(1, elapsed / dur);
+    const e = d3.easeCubicInOut(t);
+    targets.forEach((tg, n) => {
+      const s = starts.get(n);
+      n.fx = s.x + (tg.x - s.x) * e;
+      n.fy = s.y + (tg.y - s.y) * e;
+    });
+    if (t >= 1) {
+      arrangeTimer.stop(); arrangeTimer = null;
+      simulation.alphaTarget(0);          // let it cool down naturally
+    }
+  });
 }
 
 // ── SELECTION ─────────────────────────────────────────────────────────────────
@@ -405,8 +458,15 @@ function selectNode(d, nodeSel, linkSel) {
       }
     });
 
+  // Emphasise the selected node: full (untruncated) label, styled via CSS,
+  // and drawn last so nothing overlaps it.
+  nodeSel.classed('selected', n => n.id === d.id);
+  nodeSel.select('text').text(n => n.id === d.id ? n.label : truncLabel(n.label));
+  nodeSel.filter(n => n.id === d.id).raise();
+
   arrangeNeighbours(d, nodesByIds(inIds), nodesByIds(outIds), nodesByIds(bothIds));
-  showPanel(d);
+  showPanel(d);               // opens the panel, which changes the visible width…
+  panToNode(d);               // …so centre after that, not before
 }
 
 function nodesByIds(idSet) {
@@ -416,7 +476,9 @@ function nodesByIds(idSet) {
 function deselectAll(nodeSel, linkSel) {
   const maxDeg = d3.max(allNodes, d=>d.degree)||1;
   selectionGroups = new Map();
-  nodeSel.classed('dimmed', false);
+  stopArrangeAnimation();
+  nodeSel.classed('dimmed', false).classed('selected', false);
+  nodeSel.select('text').text(d => truncLabel(d.label));
   nodeSel.select('circle')
     .attr('fill',   d => d.degree>=maxDeg*0.6 ? 'var(--node-hub)' : 'var(--node-default)')
     .style('filter',d => d.degree>=maxDeg*0.6
@@ -453,7 +515,6 @@ function showPanel(d) {
         const n = allNodes.find(x => x.stem === el.dataset.stem);
         if (!n) return;
         selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
-        panToNode(n);
       });
     });
     // Ask MathJax to typeset the new content (no-op if MathJax not loaded)
@@ -487,7 +548,6 @@ function showPanel(d) {
       const n = allNodes.find(x => x.id===parseInt(el.dataset.id,10));
       if (!n) return;
       selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
-      panToNode(n);
     });
   });
 
@@ -529,24 +589,49 @@ function citem(l, dir) {
 }
 
 // ── PANEL OPEN / CLOSE ───────────────────────────────────────────────────────
-let panelUserWidth = 400;   // remembers the user's last resized width
+// Panel width is viewport-relative: 33% of the window by default, never more
+// than half the window, and never below a readable minimum.
+const PANEL_DEFAULT_FRAC = 0.33;
+const PANEL_MAX_FRAC     = 0.50;
+const PANEL_MIN_PX       = 260;
+
+const panelMaxWidth = () => Math.max(PANEL_MIN_PX, Math.round(window.innerWidth * PANEL_MAX_FRAC));
+const panelDefaultWidth = () =>
+  Math.min(panelMaxWidth(), Math.max(PANEL_MIN_PX, Math.round(window.innerWidth * PANEL_DEFAULT_FRAC)));
+const clampPanelWidth = w => Math.min(panelMaxWidth(), Math.max(PANEL_MIN_PX, w));
+
+// null until the user drags the handle; until then the default tracks the window
+let panelUserWidth = null;
+const panelWidth = () => panelUserWidth == null ? panelDefaultWidth() : clampPanelWidth(panelUserWidth);
 
 function syncToggleBtn() {
   const btn = document.getElementById('panel-toggle');
   if (!btn) return;
-  btn.textContent = panel.classList.contains('open') ? '▶' : '◀';
-  btn.title       = panel.classList.contains('open') ? 'Hide panel' : 'Show panel';
+  const open = panel.classList.contains('open');
+  btn.textContent = open ? '▶' : '◀';
+  btn.title       = open ? 'Hide panel' : (selectedNode ? 'Show panel' : 'Select a note to show its panel');
+  // Nothing selected and nothing open → the button has nothing to do
+  btn.disabled = !open && !selectedNode;
 }
 
 function openPanel() {
-  panel.style.width = panelUserWidth + 'px';
+  panel.style.width = panelWidth() + 'px';
   panel.classList.add('open');
   syncToggleBtn();
 }
 
-function closePanel() {
+// Hide the panel only. The selection, highlighting and arrangement stay as
+// they are, so the panel can be brought back for the same note.
+function hidePanel() {
   panel.classList.remove('open');
   panel.style.width = '';
+  syncToggleBtn();
+}
+
+// Hide the panel AND clear the selection: used by the ✕ button, by clicking
+// empty canvas, and when a search is cleared.
+function closePanel() {
+  hidePanel();
   deselectAll(d3.selectAll('.node'), d3.selectAll('.link'));
   selectedNode = null;
   delete panel.dataset.openedBySearch;
@@ -575,7 +660,7 @@ document.getElementById('panel-close').addEventListener('click', closePanel);
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
     const delta    = startX - e.clientX;
-    const newWidth = Math.min(780, Math.max(260, startWidth + delta));
+    const newWidth = clampPanelWidth(startWidth + delta);
     panelUserWidth  = newWidth;
     panel.style.width = newWidth + 'px';
   });
@@ -613,6 +698,9 @@ function foldHeadings(container) {
       summary.innerHTML = node.innerHTML;
       summary.dataset.level = level;
       details.appendChild(summary);
+      const body = document.createElement('div');
+      body.className = 'fold-body';
+      details.appendChild(body);
 
       // Collect all following siblings that belong under this heading:
       // stop when we hit another heading of equal or lesser depth
@@ -624,7 +712,7 @@ function foldHeadings(container) {
           FOLD_TAGS.has(sib.tagName) &&
           parseInt(sib.tagName[1]) <= level
         ) break;
-        details.appendChild(sib.cloneNode(true));
+        body.appendChild(sib.cloneNode(true));
         j++;
       }
 
@@ -763,11 +851,47 @@ function renderLists(s) {
       const indent = indentOf(lines[i]);
       const text = lines[i].replace(/^[ \t]*(?:[-*+]|\d+\.) /, '');
       i++;
-      let children = '';
-      while (i < lines.length && isList(lines[i]) && indentOf(lines[i]) > indent) {
-        children += parseList(indentOf(lines[i]));
+
+      // Everything indented deeper than this bullet belongs to it: nested
+      // lists, and plain lines that annotate or continue the item. Both are
+      // collected in source order.
+      const parts = [];
+      let cont = [];
+      const flushCont = () => {
+        if (!cont.length) return;
+        const body = cont.join('<br>').replace(/(?:<br>)+$/, '');
+        if (body) parts.push(`<div class="li-cont">${body}</div>`);
+        cont = [];
+      };
+
+      while (i < lines.length) {
+        const ln = lines[i];
+
+        if (ln.trim() === '') {
+          // A blank line only continues the item if deeper-indented prose follows
+          let j = i;
+          while (j < lines.length && lines[j].trim() === '') j++;
+          if (j < lines.length && !isList(lines[j]) && indentOf(lines[j]) > indent) {
+            cont.push('');       // becomes a paragraph break
+            i = j;
+            continue;
+          }
+          break;
+        }
+
+        if (indentOf(ln) <= indent) break;
+
+        if (isList(ln)) {
+          flushCont();
+          parts.push(parseList(indentOf(ln)));
+        } else {
+          cont.push(ln.trim());
+          i++;
+        }
       }
-      html += `<li>${text}${children}</li>`;
+      flushCont();
+
+      html += `<li>${text}${parts.join('')}</li>`;
     }
 
     html += `</${tag}>`;
@@ -850,21 +974,35 @@ function renderMd(raw) {
   s = s.replace(/_([^_\n]+)_/g, '<em>$1</em>');
 
   // ── STEP 11: callouts and blockquotes (run on raw-escaped text)
+  // A quote line is "&gt;" optionally followed by a space and text. A bare
+  // "&gt;" is part of the same quote and marks a paragraph break inside it.
+  // Lines within a paragraph keep their line breaks — in notes each line is
+  // usually a distinct example rather than wrapped prose.
+  // Leading whitespace after the ">" is kept (the paragraph is rendered with
+  // white-space: pre-wrap) so indentation inside a quote stays visible.
+  const quoteBody = raw => {
+    const lines = raw.split('\n').map(l => l.replace(/^&gt; ?/, '').replace(/\s+$/, ''));   // one space is syntax; tabs are content
+    const paras = []; let cur = [];
+    for (const l of lines) {
+      if (l.trim() === '') { if (cur.length) { paras.push(cur); cur = []; } }
+      else cur.push(l);
+    }
+    if (cur.length) paras.push(cur);
+    return paras.map(p => `<p>${p.join('<br>')}</p>`).join('');   // stays on one line for the paragraph step
+  };
+
   // Obsidian/GitHub callout: > [!TYPE] on first line, then > continuation lines
   s = s.replace(
     /(?:^|\n)(&gt; \[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT|INFO)\][ \t]*\n?)((?:&gt;[^\n]*\n?)*)/gi,
     (_, first, type, rest) => {
       const label = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
       const icon  = { note:'ℹ️', tip:'💡', warning:'⚠️', caution:'🔥', important:'📌', info:'ℹ️' }[type.toLowerCase()] || 'ℹ️';
-      const body  = rest.replace(/^&gt; ?/gm, '').trim();
-      return `<div class="callout callout-${type.toLowerCase()}"><div class="callout-title">${icon} ${label}</div><div class="callout-body">${body}</div></div>`;
+      return `\n<div class="callout callout-${type.toLowerCase()}"><div class="callout-title">${icon} ${label}</div><div class="callout-body">${quoteBody(rest)}</div></div>`;
     }
   );
-  // Plain blockquotes
-  s = s.replace(/^(&gt; .+\n?)+/gm, block => {
-    const inner = block.replace(/^&gt; ?/gm, '').trimEnd();
-    return `<blockquote>${inner}</blockquote>\n`;
-  });
+  // Plain blockquotes — one or more consecutive quote lines, bare "&gt;" included.
+  // Emitted on a single line so the paragraph step leaves it alone.
+  s = s.replace(/^(?:&gt;(?:[ \t][^\n]*)?\n?)+/gm, block => `<blockquote>${quoteBody(block)}</blockquote>\n`);
 
   // ── STEP 12: nested lists
   s = renderLists(s);
@@ -923,7 +1061,6 @@ function focusSearchMatch() {
   if (searchIndex < 0 || !searchMatches.length) return;
   const n = searchMatches[searchIndex];
   selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
-  panToNode(n);
   panel.dataset.openedBySearch = '1';
   // Update counter badge
   const counter = document.getElementById('search-count');
@@ -973,11 +1110,21 @@ function moveTooltip(e) { tooltip.style.left=(e.clientX+14)+'px'; tooltip.style.
 function hideTooltip()  { tooltip.style.display='none'; }
 
 // ── PAN / FIT ─────────────────────────────────────────────────────────────────
-function panToNode(n) {
-  const c = document.getElementById('graph-container');
-  svg.transition().duration(500).call(
+// Bring a node to the centre of the visible graph area, keeping the current
+// zoom level. The panel may still be sliding open when this runs, so the
+// visible width is computed from where the layout will end up, not from the
+// mid-transition value clientWidth would report.
+function panToNode(n, duration) {
+  const c     = document.getElementById('graph-container');
+  const mainW = document.getElementById('main').clientWidth;
+  const W     = panel.classList.contains('open') ? mainW - panelWidth() : mainW;
+  const H     = c.clientHeight;
+  const k     = d3.zoomTransform(svg.node()).k;
+  const dur   = duration != null ? duration : Math.max(300, animDuration * 0.7);
+
+  svg.transition().duration(dur).ease(d3.easeCubicInOut).call(
     zoomBehavior.transform,
-    d3.zoomIdentity.translate(c.clientWidth/2 - n.x, c.clientHeight/2 - n.y)
+    d3.zoomIdentity.translate(W / 2 - k * n.x, H / 2 - k * n.y).scale(k)
   );
 }
 
@@ -1008,6 +1155,12 @@ function fmtDate(iso) {
 
 // ── RESIZE ────────────────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
+  // Keep the panel within its 50%-of-screen cap, and let the 33% default
+  // follow the window until the user has dragged the handle.
+  if (panel.classList.contains('open')) {
+    if (panelUserWidth != null) panelUserWidth = clampPanelWidth(panelUserWidth);
+    panel.style.width = panelWidth() + 'px';
+  }
   if (simulation) {
     const c = document.getElementById('graph-container');
     simulation.force('center', d3.forceCenter(c.clientWidth/2, c.clientHeight/2));
@@ -1052,3 +1205,9 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
          : g === 'both' ? cssVar('--edge-both') : null;
   });
 });
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+// Deliberately last: every let/const above is initialised before anything runs.
+reloadBtn.addEventListener('click', loadAll);
+initControls();
+loadAll();

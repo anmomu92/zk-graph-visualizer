@@ -102,6 +102,12 @@
       <button class="ctrl-btn" id="panel-toggle" title="Toggle panel">▶</button>
     </div>
 
+    <div id="anim-ctl" title="How long the neighbours take to rearrange when you select a note. 0 = instant.">
+      <label for="anim-speed">Animation</label>
+      <input id="anim-speed" type="range" min="0" max="3000" step="100" value="900">
+      <span id="anim-speed-val">0.9s</span>
+    </div>
+
     <div id="legend">
       <div class="legend-title">Legend</div>
       <div class="legend-item"><div class="dot" style="background:var(--node-hub)"></div><span>Hub node</span></div>
