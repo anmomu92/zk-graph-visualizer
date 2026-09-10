@@ -67,43 +67,104 @@ async function loadAll() {
 //
 // If the same snippet contains both {[[target]]} and a bare [[target]], the
 // bare one wins and the edge is kept.
+// ── LINK SYNTAX ───────────────────────────────────────────────────────────────
+// A wiki-link is a target wrapped in two or three opening brackets/braces and
+// the matching closers. If any brace is involved it is a "soft" reference:
+//   [[target]]        hard link  → draws an edge
+//   {[[target]]}      soft link  → node only, no edge
+//   [{[target]}]      soft link  → node only, no edge
+// An optional |alias is ignored. This covers both brace conventions so the
+// exact one used in a notebook doesn't matter.
+const LINK_RE = /([\[{]{2,3})\s*([^\[\]{}|\n]+?)\s*(?:\|[^\[\]{}\n]*?)?([\]}]{2,3})/g;
+
+function isSoftWrap(open, close) { return /[{}]/.test(open) || /[{}]/.test(close); }
+
+// All soft-reference targets appearing in a note's text.
+function scanSoftLinks(text) {
+  const out = [];
+  if (!text) return out;
+  for (const m of String(text).matchAll(LINK_RE)) {
+    if (isSoftWrap(m[1], m[3])) out.push(m[2].trim());
+  }
+  return out;
+}
+
 function isBracedLink(l) {
   if (!l || !l.snippet) return false;
   const href = (l.href || '').trim();
   if (!href) return false;
 
-  const re = /(\{?)\s*\[\[([^\]]+)\]\]\s*(\}?)/g;
-  let m, found = false, allBraced = true;
-
-  while ((m = re.exec(l.snippet)) !== null) {
-    const target = m[2].split('|')[0].trim();   // handle [[target|alias]]
-    if (target !== href) continue;
+  let found = false, allSoft = true;
+  for (const m of String(l.snippet).matchAll(LINK_RE)) {
+    if (m[2].trim() !== href) continue;
     found = true;
-    if (!(m[1] === '{' && m[3] === '}')) allBraced = false;
+    if (!isSoftWrap(m[1], m[3])) allSoft = false;
   }
-  return found && allBraced;
+  return found && allSoft;
 }
 
 // ── BUILD GRAPH ───────────────────────────────────────────────────────────────
 function buildGraph(rawLinks) {
   const nodeMap = new Map();
 
-  // Drop soft {[[...]]} references so they don't become nodes or edges
-  bracedLinkCount = rawLinks.filter(isBracedLink).length;
+  const ensureNode = (id, path, fallbackStem) => {
+    if (!nodeMap.has(id)) {
+      const stem = fallbackStem || stemFromPath(path);
+      nodeMap.set(id, { id, stem, label: stem, path, links: [] });
+    }
+    return nodeMap.get(id);
+  };
+
+  // Soft {[[...]]} references create no edge, but the notes at either end are
+  // still real notes: register them so they appear in the graph, isolated if
+  // they have no ordinary links.
+  const braced = rawLinks.filter(isBracedLink);
+  bracedLinkCount = braced.length;
   rawLinks = rawLinks.filter(l => !isBracedLink(l));
+  braced.forEach(l => {
+    const src = ensureNode(l.sourceId, l.sourcePath);
+    const tgt = ensureNode(l.targetId, l.targetPath, l.href);
+    // Kept separate from `links` so they never affect degree, edges or layout,
+    // but remain available for navigation in the panel.
+    (src.softLinks ||= []).push({ dir: 'out', targetId: l.targetId, snippet: l.snippet, title: l.title });
+    (tgt.softLinks ||= []).push({ dir: 'in',  targetId: l.sourceId, snippet: l.snippet, title: l.title });
+  });
 
   rawLinks.forEach(l => {
-    if (!nodeMap.has(l.sourceId)) {
-      const stem = stemFromPath(l.sourcePath);
-      nodeMap.set(l.sourceId, { id: l.sourceId, stem, label: stem, path: l.sourcePath, links: [] });
-    }
-    if (!nodeMap.has(l.targetId)) {
-      const stem = l.href || stemFromPath(l.targetPath);
-      nodeMap.set(l.targetId, { id: l.targetId, stem, label: stem, path: l.targetPath, links: [] });
-    }
+    ensureNode(l.sourceId, l.sourcePath);
+    ensureNode(l.targetId, l.targetPath, l.href);
     nodeMap.get(l.sourceId).links.push({ dir: 'out', targetId: l.targetId, snippet: l.snippet, title: l.title });
     nodeMap.get(l.targetId).links.push({ dir: 'in',  targetId: l.sourceId, snippet: l.snippet, title: l.title });
   });
+
+  // zk only recognises [[...]] as a link, so a soft reference written as
+  // [{[...]}] never reaches graph.json at all. Scan the note bodies to find
+  // them, and register both ends as nodes — no edges, so they sit isolated
+  // unless something links them normally. Notes with no references of any
+  // kind, in either direction, are never added and so stay out of the graph.
+  const byStem = new Map();
+  nodeMap.forEach(n => byStem.set(n.stem, n));
+
+  const softStems = new Set();
+  let softRefs = 0;
+  noteMap.forEach((note, stem) => {
+    const targets = scanSoftLinks(note.rawContent);
+    if (!targets.length) return;
+    softRefs += targets.length;
+    softStems.add(stem);                                        // the citing note
+    targets.forEach(t => { if (noteMap.has(t)) softStems.add(t); });  // and each target
+  });
+
+  softStems.forEach(stem => {
+    if (byStem.has(stem)) return;               // already in the graph via a hard link
+    const note = noteMap.get(stem);
+    const id   = 'soft:' + stem;                // synthetic id; never used by an edge
+    nodeMap.set(id, { id, stem, label: stem, path: (note && note.path) || stem + '.md', links: [] });
+  });
+
+  // Count soft refs found in the text; fall back to the graph.json count if the
+  // note bodies aren't loaded.
+  if (softRefs) bracedLinkCount = softRefs;
 
   allNodes = Array.from(nodeMap.values());
   allLinks = rawLinks.map(l => ({ source: l.sourceId, target: l.targetId, snippet: l.snippet, title: l.title }));
@@ -272,8 +333,8 @@ hintOverlay.addEventListener('click', e => {
   const a = e.target.closest('a.node-hint');
   if (!a) return;
   e.preventDefault();
-  const id = parseInt(a.dataset.id, 10);
-  const n  = allNodes.find(x => x.id === id);
+  const id = a.dataset.id;
+  const n  = allNodes.find(x => String(x.id) === id);
   if (!n) return;
   selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
 });
@@ -531,8 +592,10 @@ function showPanel(d) {
   // ── LINKS TAB ──
   const outLinks = d.links.filter(l=>l.dir==='out');
   const inLinks  = d.links.filter(l=>l.dir==='in');
+  const soft     = d.softLinks || [];
   let lh = `<div class="section-label">Stats</div>`;
   lh += srow('Total links', d.degree) + srow('Outgoing', outLinks.length) + srow('Incoming', inLinks.length);
+  if (soft.length) lh += srow('Soft references', soft.length);
   if (outLinks.length) {
     lh += `<div class="section-label mt">Links to (${outLinks.length})</div>`;
     outLinks.forEach(l => { lh += citem(l, 'out'); });
@@ -541,11 +604,15 @@ function showPanel(d) {
     lh += `<div class="section-label mt">Linked from (${inLinks.length})</div>`;
     inLinks.forEach(l => { lh += citem(l, 'in'); });
   }
+  if (soft.length) {
+    lh += `<div class="section-label mt">Soft references (${soft.length}) <span class="label-hint">no graph edge</span></div>`;
+    soft.forEach(l => { lh += citem(l, l.dir, true); });
+  }
   const lpane = document.getElementById('tab-links');
   lpane.innerHTML = lh;
   lpane.querySelectorAll('.connection-item[data-id]').forEach(el => {
     el.addEventListener('click', () => {
-      const n = allNodes.find(x => x.id===parseInt(el.dataset.id,10));
+      const n = allNodes.find(x => String(x.id) === el.dataset.id);
       if (!n) return;
       selectNode(n, d3.selectAll('.node'), d3.selectAll('.link'));
     });
@@ -572,19 +639,19 @@ function srow(label, value) {
   return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`;
 }
 
-function citem(l, dir) {
+function citem(l, dir, soft) {
   const node  = allNodes.find(n => n.id===l.targetId);
   const title = node ? node.label : (l.title || String(l.targetId));
   const stem  = node ? node.stem  : '';
   const showStem = node && node.label !== node.stem;
-  return `<div class="connection-item" data-id="${l.targetId}">
+  return `<div class="connection-item${soft ? ' soft' : ''}" data-id="${l.targetId}">
     <span class="conn-arrow">${dir==='out'?'→':'←'}</span>
     <div style="flex:1;min-width:0">
       <div class="conn-title">${esc(title)}</div>
       ${showStem ? `<div class="conn-stem">${esc(stem)}</div>` : ''}
       ${l.snippet ? `<div class="conn-snippet">${esc(l.snippet)}</div>` : ''}
     </div>
-    <span class="conn-dir dir-${dir}">${dir}</span>
+    <span class="conn-dir ${soft ? 'dir-soft' : 'dir-' + dir}">${dir}</span>
   </div>`;
 }
 
@@ -991,13 +1058,16 @@ function renderMd(raw) {
     return paras.map(p => `<p>${p.join('<br>')}</p>`).join('');   // stays on one line for the paragraph step
   };
 
-  // Obsidian/GitHub callout: > [!TYPE] on first line, then > continuation lines
+  // Obsidian/GitHub callout: "> [!TYPE]" optionally followed by a title on the
+  // same line, then "> " continuation lines. A title replaces the type name as
+  // the heading; without one the type name is used.
   s = s.replace(
-    /(?:^|\n)(&gt; \[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT|INFO)\][ \t]*\n?)((?:&gt;[^\n]*\n?)*)/gi,
-    (_, first, type, rest) => {
-      const label = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
-      const icon  = { note:'ℹ️', tip:'💡', warning:'⚠️', caution:'🔥', important:'📌', info:'ℹ️' }[type.toLowerCase()] || 'ℹ️';
-      return `\n<div class="callout callout-${type.toLowerCase()}"><div class="callout-title">${icon} ${label}</div><div class="callout-body">${quoteBody(rest)}</div></div>`;
+    /(?:^|\n)&gt; \[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT|INFO)\][ \t]*([^\n]*)\n?((?:&gt;[^\n]*\n?)*)/gi,
+    (_, type, title, rest) => {
+      const kind  = type.toLowerCase();
+      const icon  = { note:'ℹ️', tip:'💡', warning:'⚠️', caution:'🔥', important:'📌', info:'ℹ️' }[kind] || 'ℹ️';
+      const heading = title.trim() || (type.charAt(0).toUpperCase() + type.slice(1).toLowerCase());
+      return `\n<div class="callout callout-${kind}"><div class="callout-title">${icon} ${heading}</div><div class="callout-body">${quoteBody(rest)}</div></div>`;
     }
   );
   // Plain blockquotes — one or more consecutive quote lines, bare "&gt;" included.
