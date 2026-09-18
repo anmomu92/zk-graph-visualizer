@@ -1077,21 +1077,32 @@ function renderMd(raw) {
   // ── STEP 12: nested lists
   s = renderLists(s);
 
-  // ── STEP 13: restore code blocks
-  s = s.replace(/\x00B(\d+)\x00/g, (_, i) => {
-    const inner = blocks[+i].replace(/^```[^\n]*\n?/, '').replace(/```$/, '');
-    return `<pre><code>${inner}</code></pre>`;
-  });
-
-  // ── STEP 14: restore table blocks
+  // ── STEP 13: restore table blocks
   s = s.replace(/\x00T(\d+)\x00/g, (_, i) => tableBlocks[+i]);
 
-  // ── STEP 15: restore LaTeX verbatim (MathJax processes after DOM insertion)
+  // ── STEP 14: restore LaTeX verbatim (MathJax processes after DOM insertion)
   s = s.replace(/\x00L(\d+)\x00/g, (_, i) => latex[+i]);
 
-  // ── STEP 16: paragraphs (skip lines already starting with a block tag)
+  // ── STEP 15: paragraphs (skip lines already starting with a block tag)
   s = s.replace(/^(?!<[houtbpdr]|<pre|<hr|<blockquote|<div)(.+)$/gm, '<p>$1</p>');
   s = s.replace(/<p>\s*<\/p>/g, '');
+
+  // ── STEP 16: restore code blocks LAST. Their contents are verbatim, so they
+  // must not pass through the paragraph step — every line after the first
+  // would otherwise be wrapped in <p> and gain paragraph spacing.
+  s = s.replace(/<p>\s*\x00B(\d+)\x00\s*<\/p>|\x00B(\d+)\x00/g, (_, a, b) => {
+    const raw = blocks[+(a !== undefined ? a : b)];
+    const lang = (raw.match(/^```([^\n]*)/) || [, ''])[1].trim();
+    let inner = raw.replace(/^```[^\n]*\n?/, '').replace(/[ \t]*```\s*$/, '').replace(/\n$/, '');
+    // A fence nested in a list carries that indentation into every line;
+    // strip the smallest common indent so the code reads flush.
+    const lines = inner.split('\n');
+    const indents = lines.filter(l => l.trim()).map(l => (l.match(/^[ \t]*/) || [''])[0].length);
+    const common = indents.length ? Math.min(...indents) : 0;
+    if (common > 0) inner = lines.map(l => l.slice(common)).join('\n');
+    const cls = lang ? ` class="language-${esc(lang)}"` : '';
+    return `<pre><code${cls}>${inner}</code></pre>`;
+  });
 
   return s;
 }
