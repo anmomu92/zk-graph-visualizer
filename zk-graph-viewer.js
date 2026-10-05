@@ -742,13 +742,14 @@ document.getElementById('panel-close').addEventListener('click', closePanel);
 })();
 
 // ── FOLDABLE HEADINGS ─────────────────────────────────────────────────────────
-// Wraps every H2/H3 and its following sibling content in a <details> element.
-// H1 is left as-is (it's the note title). Starts collapsed.
+// Wraps every H2/H3/H4 and its following sibling content in a <details>.
+// H1 is left as-is (it's the note title). Starts collapsed. Runs recursively,
+// so a deeper heading nested inside a fold becomes a fold of its own.
 function foldHeadings(container) {
   if (!container) return;
 
   // Heading tags we want to make foldable (not H1)
-  const FOLD_TAGS = new Set(['H2', 'H3']);
+  const FOLD_TAGS = new Set(['H2', 'H3', 'H4']);
 
   const children = Array.from(container.childNodes);
   let i = 0;
@@ -787,6 +788,10 @@ function foldHeadings(container) {
       const toRemove = children.slice(i, j);
       toRemove.forEach(n => n.parentNode && n.parentNode.removeChild(n));
       container.insertBefore(details, children[j] || null);
+
+      // The body holds only headings deeper than this one, so recursing is
+      // bounded and turns those into nested folds.
+      foldHeadings(body);
 
       // Refresh children array after DOM mutation
       children.splice(i, j - i, details);
@@ -1027,9 +1032,10 @@ function renderMd(raw) {
   s = s.replace(/\[\[([^\]]+)\]\]/g, (_, stem) => wikilinkHtml(stem, false));
 
   // ── STEP 8: headings
-  s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  s = s.replace(/^## (.+)$/gm,  '<h2>$1</h2>');
-  s = s.replace(/^# (.+)$/gm,   '<h1>$1</h1>');
+  s = s.replace(/^#### (.+)$/gm, '<h4>$1</h4>');   // deepest first: "###" would
+  s = s.replace(/^### (.+)$/gm,  '<h3>$1</h3>');   // otherwise match "#### x"
+  s = s.replace(/^## (.+)$/gm,   '<h2>$1</h2>');
+  s = s.replace(/^# (.+)$/gm,    '<h1>$1</h1>');
 
   // ── STEP 9: HR (--- that isn't a table separator — those are already consumed)
   s = s.replace(/^---+$/gm, '<hr>');

@@ -55,6 +55,7 @@
   --heading:        #f4f6fa;
   --heading-2:      #f4f6fa;
   --heading-3:      #9fb4ff;   /* tinted so h3 reads as a label, not a list item */
+  --heading-4:      #aab4c8;   /* quieter still: sentence case, sits under h3 */
   --strong:         #ffffff;
   --code-fg:        #d3dcf3;
   --code-bg:        rgba(255, 255, 255, 0.055);
@@ -124,6 +125,7 @@
     --heading:        #0f172a;
     --heading-2:      #0f172a;
     --heading-3:      #3b4fbf;
+    --heading-4:      #4b5563;
     --strong:         #0b1220;
     --code-fg:        #1e293b;
     --code-bg:        #eef1f6;
@@ -478,6 +480,14 @@ body {
   color: var(--heading-3);
   margin: 18px 0 8px;
 }
+/* h4: sentence case and untinted, so it reads as a step below the h3 label */
+.md-content h4 {
+  font-family: var(--font-heading);
+  font-size: 13px; font-weight: 700;
+  line-height: 1.4; letter-spacing: 0;
+  color: var(--heading-4);
+  margin: 14px 0 6px;
+}
 
 /* ── foldable sections ─────────────────────────────────────────────────────
    The summary is styled as a full-width header bar with the disclosure
@@ -533,6 +543,19 @@ body {
   color: var(--heading-3);
   padding-top: 6px; padding-bottom: 6px;
 }
+.md-content summary[data-level="4"] {
+  font-family: var(--font-heading);
+  font-size: 13px; font-weight: 700;
+  line-height: 1.4; letter-spacing: 0;
+  color: var(--heading-4);
+  padding-top: 5px; padding-bottom: 5px;
+  background: transparent;                /* lightest bar: deepest level */
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+.md-content summary[data-level="4"]:hover { background: var(--fold-bar); }
+/* deeper folds indent a little less, so nesting doesn't run away */
+.md-content .fold-body .fold-body { margin-left: 6px; padding-left: 12px; }
 
 /* the revealed content: clear breathing room, plus a guide rule tying it to its header */
 .md-content .fold-body {
